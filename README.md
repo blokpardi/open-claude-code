@@ -29,6 +29,7 @@ This opens a new terminal window with Claude Code running at that folder's locat
 Go to Settings → **Open Claude Code** to configure:
 
 - **Shell**: Choose between PowerShell (default) or Command Prompt (cmd)
+- **Claude Code path**: Full path to the Claude Code CLI executable. Leave blank to auto-detect. If you also have Claude Desktop installed, the Windows app alias may take precedence over the CLI — set this to the full path (e.g. `C:\Users\you\.local\bin\claude.exe`) to avoid conflicts.
 
 ## Requirements
 

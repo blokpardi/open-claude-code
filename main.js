@@ -1,9 +1,11 @@
 const { Plugin, TFolder, Notice, PluginSettingTab, Setting } = require('obsidian');
 const { exec } = require('child_process');
 const path = require('path');
+const os = require('os');
 
 const DEFAULT_SETTINGS = {
-	shell: 'powershell'
+	shell: 'powershell',
+	claudePath: ''
 };
 
 class OpenClaudeCodeSettingTab extends PluginSettingTab {
@@ -25,6 +27,21 @@ class OpenClaudeCodeSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.shell)
 				.onChange(async (value) => {
 					this.plugin.settings.shell = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Claude Code path')
+			.setDesc(
+				'Full path to the Claude Code CLI executable. Leave blank to auto-detect. ' +
+				'If you have Claude Desktop installed, the wrong "claude" may be found on your PATH — ' +
+				'set this to the CLI path (e.g. C:\\Users\\you\\.local\\bin\\claude.exe).'
+			)
+			.addText(text => text
+				.setPlaceholder('Auto-detect')
+				.setValue(this.plugin.settings.claudePath)
+				.onChange(async (value) => {
+					this.plugin.settings.claudePath = value.trim();
 					await this.plugin.saveSettings();
 				}));
 	}
@@ -59,13 +76,29 @@ module.exports = class OpenClaudeCodePlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	getClaudeExecutable() {
+		if (this.settings.claudePath) {
+			return `"${this.settings.claudePath}"`;
+		}
+		// Default to the standard CLI install path to avoid
+		// picking up the Claude Desktop app alias in WindowsApps
+		const defaultPath = path.join(os.homedir(), '.local', 'bin', 'claude.exe');
+		try {
+			require('fs').accessSync(defaultPath);
+			return `"${defaultPath}"`;
+		} catch {
+			return 'claude';
+		}
+	}
+
 	openClaudeCode(folderPath) {
 		const vaultPath = this.app.vault.adapter.basePath;
 		const fullPath = folderPath === '/'
 			? vaultPath
 			: path.join(vaultPath, folderPath);
 
-		const claudeCmd = 'claude --dangerously-skip-permissions';
+		const claudeExe = this.getClaudeExecutable();
+		const claudeCmd = `${claudeExe} --dangerously-skip-permissions`;
 
 		let wtCommand;
 		let fallbackCommand;
@@ -74,8 +107,8 @@ module.exports = class OpenClaudeCodePlugin extends Plugin {
 			wtCommand = `wt.exe -w new -d "${fullPath}" cmd /k ${claudeCmd}`;
 			fallbackCommand = `cmd.exe /c start "" cmd /k "cd /d "${fullPath}" && ${claudeCmd}"`;
 		} else {
-			wtCommand = `wt.exe -w new -d "${fullPath}" powershell -NoExit -Command "${claudeCmd}"`;
-			fallbackCommand = `cmd.exe /c start "" powershell -NoExit -Command "cd '${fullPath}'; ${claudeCmd}"`;
+			wtCommand = `wt.exe -w new -d "${fullPath}" powershell -NoExit -Command "& ${claudeCmd}"`;
+			fallbackCommand = `cmd.exe /c start "" powershell -NoExit -Command "cd '${fullPath}'; & ${claudeCmd}"`;
 		}
 
 		exec(wtCommand, (error) => {
