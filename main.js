@@ -1,9 +1,40 @@
-const { Plugin, TFolder, Notice } = require('obsidian');
+const { Plugin, TFolder, Notice, PluginSettingTab, Setting } = require('obsidian');
 const { exec } = require('child_process');
 const path = require('path');
 
+const DEFAULT_SETTINGS = {
+	shell: 'powershell'
+};
+
+class OpenClaudeCodeSettingTab extends PluginSettingTab {
+	constructor(app, plugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display() {
+		const { containerEl } = this;
+		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName('Shell')
+			.setDesc('Which shell to use when opening Claude Code.')
+			.addDropdown(dropdown => dropdown
+				.addOption('powershell', 'PowerShell')
+				.addOption('cmd', 'Command Prompt (cmd)')
+				.setValue(this.plugin.settings.shell)
+				.onChange(async (value) => {
+					this.plugin.settings.shell = value;
+					await this.plugin.saveSettings();
+				}));
+	}
+}
+
 module.exports = class OpenClaudeCodePlugin extends Plugin {
 	async onload() {
+		await this.loadSettings();
+		this.addSettingTab(new OpenClaudeCodeSettingTab(this.app, this));
+
 		this.registerEvent(
 			this.app.workspace.on('file-menu', (menu, file) => {
 				if (file instanceof TFolder) {
@@ -20,17 +51,35 @@ module.exports = class OpenClaudeCodePlugin extends Plugin {
 		);
 	}
 
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
+	}
+
 	openClaudeCode(folderPath) {
 		const vaultPath = this.app.vault.adapter.basePath;
 		const fullPath = folderPath === '/'
 			? vaultPath
 			: path.join(vaultPath, folderPath);
 
-		const wtCommand = `wt.exe -w new -d "${fullPath}" powershell -NoExit -Command "claude . --dangerously-skip-permissions"`;
+		const claudeCmd = 'claude --dangerously-skip-permissions';
+
+		let wtCommand;
+		let fallbackCommand;
+
+		if (this.settings.shell === 'cmd') {
+			wtCommand = `wt.exe -w new -d "${fullPath}" cmd /k ${claudeCmd}`;
+			fallbackCommand = `cmd.exe /c start "" cmd /k "cd /d "${fullPath}" && ${claudeCmd}"`;
+		} else {
+			wtCommand = `wt.exe -w new -d "${fullPath}" powershell -NoExit -Command "${claudeCmd}"`;
+			fallbackCommand = `cmd.exe /c start "" powershell -NoExit -Command "cd '${fullPath}'; ${claudeCmd}"`;
+		}
 
 		exec(wtCommand, (error) => {
 			if (error) {
-				const fallbackCommand = `cmd.exe /c start "" powershell -NoExit -Command "cd '${fullPath}'; claude . --dangerously-skip-permissions"`;
 				exec(fallbackCommand, (fallbackError) => {
 					if (fallbackError) {
 						new Notice(`Failed to open Claude Code: ${fallbackError.message}`);

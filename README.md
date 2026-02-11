@@ -24,8 +24,14 @@ Right-click any folder in the file explorer → **Open Claude Code**
 
 This opens a new terminal window with Claude Code running at that folder's location.
 
+## Settings
+
+Go to Settings → **Open Claude Code** to configure:
+
+- **Shell**: Choose between PowerShell (default) or Command Prompt (cmd)
+
 ## Requirements
 
 - Windows (desktop only)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and available on your PATH
-- [Windows Terminal](https://aka.ms/terminal) (recommended) — falls back to PowerShell if not available
+- [Windows Terminal](https://aka.ms/terminal) (recommended) — falls back to direct shell launch if not available
